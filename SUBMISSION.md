@@ -2,6 +2,16 @@
 
 > 每一項後面的「證據」是本專案（`rag-wiki/`）內的檔案路徑。
 
+> **公開連結**
+> - 教學簡報：https://kkyl11.github.io/rag-wiki/deck.html
+> - LLM Wiki（目錄）：https://github.com/KKyl11/rag-wiki/blob/main/wiki/index.md
+> - 專案 repo：https://github.com/KKyl11/rag-wiki
+> - 流程圖（GitHub 會直接渲染 Mermaid）：https://github.com/KKyl11/rag-wiki/blob/main/docs/workflow.md
+> - 執行紀錄：https://github.com/KKyl11/rag-wiki/blob/main/runs/run-001/report.md 、 https://github.com/KKyl11/rag-wiki/blob/main/runs/run-002/report.md
+> - 反思：https://github.com/KKyl11/rag-wiki/blob/main/docs/reflection.md
+> - 公開版不含課程簡報 PDF 與 raw/ 原始資料副本；完整 commit 歷史在 docs/git-log.md
+
+
 ---
 
 ## 1. LLM Wiki 主題與簡短介紹
@@ -30,7 +40,7 @@
 
 ## 2. LLM Wiki 連結或成果
 
-- Wiki 目錄：`wiki/index.md`（22 頁）
+- Wiki 目錄：`wiki/index.md`（22 頁）— https://github.com/KKyl11/rag-wiki/blob/main/wiki/index.md
 - Wiki 時間線：`wiki/log.md`（7 次 ingest、1 次 contradiction、lint、query 寫回）
 - Lint 結果：`docs/lint-report.md`（PASS，0 error）
 - Lint 歷程：`docs/lint-history.md`。第一次 lint 全過，但 `scripts/test_lint.py` 故意埋錯後，發現 lint 自己有漏洞（相關頁面豁免太寬）。新增「數字對照原文」檢查後，又抓到 wiki 裡 3 個單位換算錯誤（例如把 `$314 million` 寫成「3.14 億」，原文找不到這個寫法）。
@@ -38,7 +48,7 @@
 
 ## 3. 教學 HTML 簡報連結
 
-- 簡報：`deck.html`，共 15 頁，是 run-002 的成品
+- 簡報：https://kkyl11.github.io/rag-wiki/deck.html （檔案：`deck.html`，共 15 頁，是 run-002 的成品）
   - 單一檔案，用瀏覽器直接打開即可。
   - ← → 翻頁；按 A 顯示小測驗答案；按 F 全螢幕。
   - 每頁頁尾標出用到的 wiki 頁面，右下角有頁碼。
