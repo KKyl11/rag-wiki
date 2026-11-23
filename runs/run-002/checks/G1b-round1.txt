@@ -1,0 +1,8 @@
+cards/anthropic2024.md：7 個證據項目
+cards/asai2023.md：4 個證據項目
+cards/edge2024.md：5 個證據項目
+cards/gao2023.md：13 個證據項目
+cards/karpathy-llmwiki.md：5 個證據項目
+cards/lewis2020.md：12 個證據項目
+cards/liu2023.md：6 個證據項目
+PASS

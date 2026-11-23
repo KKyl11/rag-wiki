@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG 是什麼？讓 AI 先查資料再回答</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --paper: #fffdf8; --ink: #1f2328; --muted: #5b616b; --line: #e3ddd0;
+    --accent: #1d5c63; --accent-soft: #e3f0ef; --warm: #b4532a; --warm-soft: #fbeee6;
+    --violet: #5a4a8a; --violet-soft: #efecf7;
+    --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font); }
+  #stage { position: fixed; inset: 0; display: grid; place-items: center; overflow: hidden; }
+  #deck { width: 1280px; height: 720px; position: relative; transform-origin: center center; }
+  .slide { position: absolute; inset: 0; width: 1280px; height: 720px; background: var(--paper);
+    border-radius: 18px; box-shadow: 0 10px 40px rgba(40, 30, 10, .12); display: none; overflow: hidden; }
+  .slide.active { display: block; }
+  .content { position: absolute; left: 72px; right: 72px; top: 52px; bottom: 70px; overflow: hidden; }
+  .kicker { font-size: 18px; letter-spacing: .12em; color: var(--accent); font-weight: 700; margin-bottom: 6px; }
+  h2 { font-size: 40px; line-height: 1.25; margin: 0 0 16px; font-weight: 800; }
+  h3 { font-size: 24px; margin: 18px 0 8px; color: var(--accent); }
+  .body { font-size: 24px; line-height: 1.5; }
+  .body p { margin: 0 0 14px; }
+  .body ul, .body ol { margin: 0 0 14px; padding-left: 1.3em; }
+  .body li { margin: 0 0 6px; }
+  .body li::marker { color: var(--accent); }
+  strong { color: var(--warm); }
+  code { font-size: .85em; background: #f0ece2; padding: 1px 6px; border-radius: 5px; }
+  table { border-collapse: collapse; width: 100%; font-size: 20px; line-height: 1.4; margin: 4px 0 14px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+  .box { border-radius: 12px; padding: 14px 18px; margin: 10px 0 14px; font-size: 21px; line-height: 1.5; }
+  .box.callout { background: var(--accent-soft); border-left: 6px solid var(--accent); }
+  .box.analogy { background: var(--violet-soft); border-left: 6px solid var(--violet); }
+  .box.debate { background: var(--warm-soft); border-left: 6px solid var(--warm); }
+  .flow { display: flex; align-items: stretch; gap: 10px; margin: 8px 0 18px; flex-wrap: nowrap; }
+  .flow .step { flex: 1 1 0; background: var(--accent); color: #fff; border-radius: 12px; padding: 14px 12px;
+    font-size: 20px; line-height: 1.35; text-align: center; display: grid; place-items: center; font-weight: 600; }
+  .flow .step:nth-child(4n+3) { background: #2f7a72; }
+  .flow .arrow { align-self: center; font-size: 28px; color: var(--muted); }
+  .quiz { padding-left: 1.4em; }
+  .quiz li { margin-bottom: 14px; }
+  .quiz .q { display: block; }
+  .quiz .a { display: block; font-size: 19px; color: var(--accent); margin-top: 4px; visibility: hidden; }
+  .reveal .quiz .a { visibility: visible; }
+  footer { position: absolute; left: 72px; right: 40px; bottom: 18px; height: 34px; display: flex;
+    justify-content: space-between; align-items: center; font-size: 14px; color: var(--muted);
+    border-top: 1px solid var(--line); padding-top: 8px; }
+  footer .wiki span { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+  .pageno { font-weight: 700; color: var(--accent); font-size: 16px; }
+  /* 封面 */
+  .slide.layout-cover { background: linear-gradient(135deg, #1d5c63 0%, #13393d 100%); color: #fff; }
+  .slide.layout-cover .content { top: 150px; }
+  .slide.layout-cover h2 { font-size: 60px; color: #fff; }
+  .slide.layout-cover .kicker { color: #bfe3df; }
+  .slide.layout-cover .body { font-size: 26px; color: #e6f2f0; }
+  .slide.layout-cover strong { color: #ffd6b8; }
+  .slide.layout-cover footer { color: #bfe3df; border-color: rgba(255,255,255,.25); }
+  .slide.layout-cover .pageno { color: #fff; }
+  #progress { position: fixed; left: 0; top: 0; height: 4px; background: var(--accent); transition: width .2s; }
+  #hint { position: fixed; right: 14px; bottom: 10px; font-size: 12px; color: var(--muted); }
+  @media print {
+    #stage { position: static; display: block; } #deck { transform: none !important; height: auto; }
+    .slide { display: block; position: relative; page-break-after: always; margin-bottom: 0; box-shadow: none; }
+    #progress, #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="stage"><div id="deck">
+<section class="slide layout-cover" data-n="1" data-wiki="concepts/rag.md,concepts/llm-knowledge-limits.md">
+  <div class="content">
+    <div class="kicker">教學簡報｜給第一次聽到 RAG 的你</div>
+    <h2>RAG 是什麼？讓 AI 先查資料再回答</h2>
+    <div class="body">
+<p>你問 AI 一個需要<strong>最新資訊</strong>的問題，它可能會編造答案——怎麼辦？</p>
+<p><strong>RAG（Retrieval-Augmented Generation，檢索增強生成）</strong>：讓語言模型先去資料庫找相關段落，再根據找到的內容寫答案。</p>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>concepts/rag.md</span> · <span>concepts/llm-knowledge-limits.md</span></div><div class="pageno">1 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="2" data-wiki="concepts/llm-knowledge-limits.md">
+  <div class="content">
+    <div class="kicker">問題</div>
+    <h2>LLM 為什麼會答錯或過時？</h2>
+    <div class="body">
+<p>只靠背在參數裡的知識回答的語言模型，有三個問題：</p>
+<ul><li><strong>幻覺（hallucination）</strong>：模型可能編造答案；遇到超出訓練資料、或需要最新資訊的問題時特別容易發生。</li><li><strong>過時</strong>：模型無法輕易擴充或修改記憶，純參數模型要再訓練才能跟上世界變化。</li><li><strong>無法追溯</strong>：模型難以說明預測的依據，說不出出處。</li></ul>
+<div class="box callout">解法方向：引用外部知識，能有效減少產生事實錯誤內容的問題，也能持續更新知識。</div>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>concepts/llm-knowledge-limits.md</span></div><div class="pageno">2 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="3" data-wiki="concepts/parametric-vs-nonparametric-memory.md,comparisons/rag-vs-fine-tuning.md">
+  <div class="content">
+    <div class="kicker">概念</div>
+    <h2>核心概念：參數記憶 vs 非參數記憶</h2>
+    <div class="body">
+<table><thead><tr><th></th><th>參數記憶</th><th>非參數記憶</th></tr></thead><tbody><tr><td>存在哪裡</td><td>模型參數</td><td>外部文件索引（例如 Wikipedia）</td></tr><tr><td>怎麼更新</td><td>需要再訓練</td><td>替換索引即可</td></tr><tr><td>看得懂嗎</td><td>難以說明預測依據</td><td>由原始文字構成，人可讀也可改</td></tr></tbody></table>
+<p>RAG 把兩者結合：模型參數裡的知識，加上一份可以檢索的外部資料。</p>
+<div class="box callout">來源原有的比喻（Gao et al. 比較 RAG 與 fine-tuning 時）：RAG 像給模型一本<strong>量身訂做的課本</strong>隨時翻查；fine-tuning（微調）像學生花時間把知識內化進腦中。</div>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>concepts/parametric-vs-nonparametric-memory.md</span> · <span>comparisons/rag-vs-fine-tuning.md</span></div><div class="pageno">3 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="4" data-wiki="concepts/rag-paradigms.md,concepts/rag.md">
+  <div class="content">
+    <div class="kicker">流程</div>
+    <h2>RAG 怎麼運作：索引 → 檢索 → 生成</h2>
+    <div class="body">
+<div class="flow"><div class="step">① 索引：把資料切成小塊，用 embedding 模型編碼成向量，存進向量資料庫</div><div class="arrow" aria-hidden="true">→</div><div class="step">② 檢索：把問題也轉成向量，取最相似的 top-K 片段</div><div class="arrow" aria-hidden="true">→</div><div class="step">③ 生成：問題＋片段一起交給 LLM 回答</div></div>
+<ul><li>這是最基本的 Naive RAG，也就是「Retrieve-Read」流程：先檢索、再閱讀。</li><li>top-K：和問題最相似的前 K 個片段。下兩頁拆開看「切塊」與「檢索」。</li></ul>
+<div class="box analogy">🎓 教學比喻（非來源內容）：像寫報告前先去圖書館——先替書做好目錄，再找出相關的幾頁，最後根據那幾頁寫答案。</div>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>concepts/rag-paradigms.md</span> · <span>concepts/rag.md</span></div><div class="pageno">4 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="5" data-wiki="concepts/chunking.md">
+  <div class="content">
+    <div class="kicker">流程</div>
+    <h2>第一步拆開看：切塊（chunking）</h2>
+    <div class="body">
+<ul><li><strong>為什麼要切？</strong> 把長文件切成一小段一小段，檢索器才能一段一段比對、挑選。</li><li><strong>RAG 原始論文的做法</strong>：每篇 Wikipedia 文章切成不重疊的 100 字片段，共 21M 段。</li><li><strong>最常見的做法</strong>：以固定 token 數切分，例如 100、256、512。</li></ul>
+<table><thead><tr><th></th><th>切大塊</th><th>切小塊</th></tr></thead><tbody><tr><td>好處</td><td>保留較多脈絡</td><td>雜訊少</td></tr><tr><td>代價</td><td>雜訊多、處理時間與成本較高</td><td>可能傳達不了必要的脈絡</td></tr></tbody></table>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>concepts/chunking.md</span></div><div class="pageno">5 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="6" data-wiki="concepts/retriever.md">
+  <div class="content">
+    <div class="kicker">流程</div>
+    <h2>第二步拆開看：嵌入（embedding）與檢索</h2>
+    <div class="body">
+<ul><li><strong>嵌入（embedding）</strong>：RAG 原始論文把文件與問題分別編碼成向量，再找出最相似的 top-k 片段；檢索靠的是計算兩者的相似度。</li><li><strong>BM25</strong>：字詞重疊式的檢索，比對問題和片段裡相同的字詞。</li><li><strong>兩者互補</strong>：查 Error code TS-999 時，embedding 可能只找到一般錯誤碼的內容，BM25 則能精確比對 TS-999。兩者捕捉不同的相關性特徵，可以混合（hybrid）互補。</li></ul>
+<div class="box analogy">🎓 教學比喻（非來源內容）：把每段文字想成地圖上的一個點，意思越像的文字靠得越近；檢索就是找出離問題最近的幾個點。</div>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>concepts/retriever.md</span></div><div class="pageno">6 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="7" data-wiki="sources/lewis2020.md">
+  <div class="content">
+    <div class="kicker">例子</div>
+    <h2>具體例子：換掉外部索引，答案就跟著更新</h2>
+    <div class="body">
+<p>RAG 原始論文的實驗：找出 82 位在 2016 到 2018 年間換人的世界領袖，問 RAG「Who is {position}?」（某個職位現在是誰？）</p>
+<table><thead><tr><th>情況</th><th>答對率</th></tr></thead><tbody><tr><td>用 2016 索引問 2016 領袖</td><td>70%</td></tr><tr><td>用 2018 索引問 2018 領袖</td><td>68%</td></tr><tr><td>索引與年份不對</td><td>只剩 12% 與 4%</td></tr></tbody></table>
+<div class="box callout">結論：只要替換非參數記憶（外部索引），就能更新 RAG 的世界知識，不需重新訓練。</div>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>sources/lewis2020.md</span></div><div class="pageno">7 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="8" data-wiki="concepts/contextual-retrieval.md,concepts/reranking.md">
+  <div class="content">
+    <div class="kicker">進階變形</div>
+    <h2>進階 1：Contextual Retrieval——替片段補上下文</h2>
+    <div class="body">
+<p>Contextual Retrieval：先替每個片段補一句說明，再拿去建索引。</p>
+<ul><li><strong>問題</strong>（例子）：片段「公司營收比上一季成長 3%」沒說是哪家公司、哪一季。</li><li><strong>做法</strong>：用 Claude 讀整份文件與片段，生成 50–100 tokens 的說明加在片段前面，再建 embedding 與 BM25 索引。</li><li><strong>可再疊加 reranking</strong>：初步檢索後重新排名，把最相關的片段排到前面。</li></ul>
+<table><thead><tr><th>做法（top-20 檢索失敗率：相關文件沒出現在前 20 個片段裡的比例；降幅是和基準比的相對降幅）</th><th>失敗率</th></tr></thead><tbody><tr><td>基準</td><td>5.7%</td></tr><tr><td>Contextual Embeddings（單獨使用）</td><td>3.7%（降 35%）</td></tr><tr><td>Contextual Embeddings ＋ Contextual BM25</td><td>2.9%（降 49%）</td></tr><tr><td>再 ＋ Reranking</td><td>1.9%（降 67%）</td></tr></tbody></table>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>concepts/contextual-retrieval.md</span> · <span>concepts/reranking.md</span></div><div class="pageno">8 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="9" data-wiki="concepts/self-rag.md,concepts/graphrag.md">
+  <div class="content">
+    <div class="kicker">進階變形</div>
+    <h2>進階 2：Self-RAG 與 GraphRAG</h2>
+    <div class="body">
+<h3>Self-RAG：需要時才查，查完自己檢查</h3>
+<ul><li><strong>解決什麼</strong>：傳統 RAG 不論需要與否，都固定檢索一定數量段落。</li><li><strong>做法</strong>：模型判斷需要時才檢索，並用反思標記評估段落的相關性、輸出是否被段落支持、回答是否有用。</li></ul>
+<h3>GraphRAG：回答關於整份資料的全域問題</h3>
+<ul><li><strong>解決什麼</strong>：「資料集的主要主題是什麼？」這類全域問題，一般 RAG 會失敗。</li><li><strong>做法</strong>：用 LLM 把文件建成知識圖、替各群集寫摘要，回答時每份摘要先各自產生部分答案，再合成最終答案。</li><li><strong>結果</strong>：論文用 LLM 當評審兩兩比較；全面性勝率對 vector RAG 為 72–83%（Podcast）與 72–80%（新聞），vector RAG 的答案則最直接。</li></ul>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>concepts/self-rag.md</span> · <span>concepts/graphrag.md</span></div><div class="pageno">9 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="10" data-wiki="concepts/rag-paradigms.md,sources/lewis2020.md">
+  <div class="content">
+    <div class="kicker">限制</div>
+    <h2>RAG 也會答錯</h2>
+    <div class="body">
+<p>Naive RAG 的問題（Gao et al. 的整理）：</p>
+<ul><li>檢索可能選到不相關片段、漏掉關鍵資訊。</li><li>生成可能出現檢索內容不支持的幻覺。</li><li>整合多段資訊可能不連貫或重複。</li></ul>
+<p>RAG 原始論文也指出一個限制：Wikipedia 或任何外部知識來源，都不可能完全正確、完全沒有偏誤。</p>
+<div class="box callout">原始論文作者認為，以 Wikipedia 為依據能讓模型較少「幻覺」；但同一篇論文也承認外部知識來源不可能完全正確。</div>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>concepts/rag-paradigms.md</span> · <span>sources/lewis2020.md</span></div><div class="pageno">10 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="11" data-wiki="concepts/lost-in-the-middle.md,comparisons/rag-vs-long-context.md,sources/liu2023.md">
+  <div class="content">
+    <div class="kicker">限制與爭議</div>
+    <h2>限制：資料塞越多越好嗎？（Lost in the Middle）</h2>
+    <div class="body">
+<ul><li><strong>U 形曲線</strong>：相關資訊在開頭或結尾時表現最好，在中間時最差。</li><li><strong>嚴重時</strong>：GPT-3.5-Turbo 在 20、30 篇文件設定的最差情況，比完全不給文件（closed-book，56.1%）還低。</li><li><strong>多放不一定有用</strong>：檢索超過 20 篇只帶來些微進步，卻大幅增加輸入長度；Anthropic 的實驗在 5、10、20 個片段中則以 20 最好。</li><li><strong>作者建議</strong>的值得研究的方向：用 reranking 把相關資訊推到輸入開頭，或截短排名清單。</li></ul>
+<div class="box debate">⚖️ 兩種說法：Liu et al. 發現關鍵文件在中間時，表現可能比不給文件還差；Gao et al. 引述 Cuconasu et al. 的研究則發現，加入不相關文件反而可能讓準確率提升超過 30%。後者只有二手描述，無法比對實驗設定。</div>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>concepts/lost-in-the-middle.md</span> · <span>comparisons/rag-vs-long-context.md</span> · <span>sources/liu2023.md</span></div><div class="pageno">11 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="12" data-wiki="comparisons/rag-vs-long-context.md,comparisons/rag-vs-fine-tuning.md,concepts/lost-in-the-middle.md">
+  <div class="content">
+    <div class="kicker">限制與爭議</div>
+    <h2>爭議：模型讀得下整本書，還需要 RAG 嗎？</h2>
+    <div class="body">
+<p>LLM 現在能處理超過 200,000 tokens 的脈絡，過去靠 RAG 的長文件問答，現在可以把整份文件直接放進 prompt。</p>
+<h3>可以不用 RAG 的時候</h3>
+<ul><li>Anthropic 的建議：知識庫小於 200,000 tokens（約 500 頁）時，可以直接全部放進 prompt。</li></ul>
+<h3>Gao et al. 認為 RAG 仍需要的理由</h3>
+<ul><li>一次給大量脈絡會明顯拖慢推理速度。</li><li>RAG 能找到原始出處讓使用者驗證；只靠長上下文的生成像黑盒子。</li></ul>
+<p>另外，Liu et al. 發現擴充脈絡長度的模型也有 Lost in the Middle 現象（見上一頁）。</p>
+<div class="box callout">另一個比較：RAG 擅長精確查找、可即時更新；fine-tuning 擅長複製特定結構、風格或格式。兩者不互斥，可以互補。</div>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>comparisons/rag-vs-long-context.md</span> · <span>comparisons/rag-vs-fine-tuning.md</span> · <span>concepts/lost-in-the-middle.md</span></div><div class="pageno">12 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="13" data-wiki="comparisons/rag-vs-llm-wiki.md,concepts/llm-wiki.md">
+  <div class="content">
+    <div class="kicker">比較</div>
+    <h2>RAG vs LLM Wiki（這份作業就是 LLM Wiki）</h2>
+    <div class="body">
+<p>Karpathy 把 LLM Wiki 定位成與 RAG 不同的做法：</p>
+<table><thead><tr><th></th><th>RAG</th><th>LLM Wiki</th></tr></thead><tbody><tr><td>何時整理知識</td><td>查詢時才檢索相關片段</td><td>加入來源時就整合進 wiki</td></tr><tr><td>知識會累積嗎</td><td>每次從頭重新發現，沒有累積</td><td>編譯一次、持續更新，越用越豐富</td></tr><tr><td>怎麼找資料</td><td>依 embedding 相似度取 top-K 片段</td><td>先讀 index 找頁面再深入（中等規模不需要 embedding 基礎設施）</td></tr><tr><td>怎麼更新／維護</td><td>換掉索引即可更新知識</td><td>LLM 負責維護，人負責挑來源與提問</td></tr></tbody></table>
+<ul><li>三層架構：唯讀的原始資料、LLM 維護的 wiki、規定規則的 schema（本作業的 <code>AGENTS.md</code>）。</li></ul>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>comparisons/rag-vs-llm-wiki.md</span> · <span>concepts/llm-wiki.md</span></div><div class="pageno">13 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="14" data-wiki="concepts/rag.md,concepts/rag-paradigms.md,concepts/lost-in-the-middle.md,comparisons/rag-vs-llm-wiki.md">
+  <div class="content">
+    <div class="kicker">回顧</div>
+    <h2>重點回顧＋小測驗</h2>
+    <div class="body">
+<ul><li>RAG：先去資料庫找相關段落，再根據找到的內容寫答案。</li><li>最基本的 Naive RAG 流程：索引 → 檢索 → 生成。</li><li>相關資訊放在長輸入的中間時，模型表現最差。</li></ul>
+<ol class="quiz">
+<li><span class="q">最基本的 Naive RAG 有哪三個步驟？</span><span class="a">索引、檢索、生成</span></li>
+<li><span class="q">想讓 RAG 知道新的事，需要重新訓練模型嗎？</span><span class="a">不用，換掉索引就能更新知識</span></li>
+<li><span class="q">關鍵資訊放在長輸入的哪裡，模型表現最差？</span><span class="a">中間（Lost in the Middle）</span></li>
+<li><span class="q">RAG 和 LLM Wiki 在何時整理知識上有什麼不同？</span><span class="a">RAG 查詢時才檢索；LLM Wiki 加入來源時就整合進 wiki</span></li>
+</ol>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>concepts/rag.md</span> · <span>concepts/rag-paradigms.md</span> · <span>concepts/lost-in-the-middle.md</span> · <span>comparisons/rag-vs-llm-wiki.md</span></div><div class="pageno">14 / 15</div></footer>
+</section>
+<section class="slide layout-content" data-n="15" data-wiki="sources/lewis2020.md,sources/gao2023.md,sources/liu2023.md,sources/asai2023.md,sources/edge2024.md,sources/anthropic2024.md,sources/karpathy-llmwiki.md">
+  <div class="content">
+    <div class="kicker">參考資料</div>
+    <h2>參考資料</h2>
+    <div class="body">
+<ul><li>Lewis et al. 2020. Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks. arXiv 2005.11401</li><li>Gao et al. 2023. Retrieval-Augmented Generation for Large Language Models: A Survey. arXiv 2312.10997</li><li>Liu et al. 2023. Lost in the Middle: How Language Models Use Long Contexts. arXiv 2307.03172</li><li>Asai et al. 2023. Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection. arXiv 2310.11511</li><li>Edge et al. 2024. From Local to Global: A GraphRAG Approach to Query-Focused Summarization. arXiv 2404.16130</li><li>Anthropic 2024. Introducing Contextual Retrieval.</li><li>Karpathy. LLM Wiki（GitHub gist）.</li></ul>
+<p>本簡報每一頁的內容都來自本專案的 RAG LLM Wiki，頁尾標出對應的 wiki 頁面。</p>
+    </div>
+  </div>
+  <footer><div class="wiki">📚 Wiki：<span>sources/lewis2020.md</span> · <span>sources/gao2023.md</span> · <span>sources/liu2023.md</span> · <span>sources/asai2023.md</span> · <span>sources/edge2024.md</span> · <span>sources/anthropic2024.md</span> · <span>sources/karpathy-llmwiki.md</span></div><div class="pageno">15 / 15</div></footer>
+</section>
+</div></div>
+<div id="hint">← → 翻頁 · A 顯示答案 · F 全螢幕</div>
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var deck = document.getElementById('deck');
+  var cur = 0;
+  function fit() {
+    var s = Math.min(window.innerWidth / 1320, window.innerHeight / 760);
+    deck.style.transform = 'scale(' + s + ')';
+  }
+  function show(i) {
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function (el, k) { el.classList.toggle('active', k === cur); });
+    document.getElementById('progress').style.width = ((cur + 1) / slides.length * 100) + '%';
+    if (location.hash !== '#' + (cur + 1)) history.replaceState(null, '', '#' + (cur + 1));
+  }
+  document.addEventListener('keydown', function (e) {
+    if (['ArrowRight', 'PageDown', ' ', 'Enter'].indexOf(e.key) >= 0) { e.preventDefault(); show(cur + 1); }
+    else if (['ArrowLeft', 'PageUp', 'Backspace'].indexOf(e.key) >= 0) { e.preventDefault(); show(cur - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key === 'a' || e.key === 'A') slides[cur].classList.toggle('reveal');
+    else if (e.key === 'f' || e.key === 'F') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); }
+  });
+  document.getElementById('stage').addEventListener('click', function (e) {
+    if (e.target.closest('.quiz')) { slides[cur].classList.toggle('reveal'); return; }
+    show(e.clientX > window.innerWidth / 2 ? cur + 1 : cur - 1);
+  });
+  var tx = null;
+  document.addEventListener('touchstart', function (e) { tx = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (tx === null) return; var dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 40) show(dx < 0 ? cur + 1 : cur - 1); tx = null;
+  });
+  window.addEventListener('resize', fit);
+  window.addEventListener('hashchange', function () { var n = parseInt(location.hash.slice(1), 10); if (n) show(n - 1); });
+  fit();
+  var n0 = parseInt(location.hash.slice(1), 10);
+  show(n0 ? n0 - 1 : 0);
+  window.__deck = { show: show, current: function () { return cur; }, count: slides.length };
+})();
+</script>
+</body>
+</html>

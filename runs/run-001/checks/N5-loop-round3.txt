@@ -1,0 +1,20 @@
+頁數：15
+溢出量測：headless Chrome，1280×720 實際排版
+  slide  1: 內容高度 500/500px
+  slide  2: 內容高度 598/598px
+  slide  3: 內容高度 598/598px
+  slide  4: 內容高度 598/598px
+  slide  5: 內容高度 598/598px
+  slide  6: 內容高度 598/598px
+  slide  7: 內容高度 598/598px
+  slide  8: 內容高度 598/598px
+  slide  9: 內容高度 598/598px
+  slide 10: 內容高度 598/598px
+  slide 11: 內容高度 598/598px
+  slide 12: 內容高度 598/598px
+  slide 13: 內容高度 598/598px
+  slide 14: 內容高度 598/598px
+  slide 15: 內容高度 598/598px
+鍵盤翻頁：→ 後在第 2 頁、← 後回到第 1 頁
+截圖：C:\Users\user\Documents\Claude\TAICA_ai\rag-wiki\runs\run-001\screenshots（15 張）
+PASS

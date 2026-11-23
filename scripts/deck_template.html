@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --paper: #fffdf8; --ink: #1f2328; --muted: #5b616b; --line: #e3ddd0;
+    --accent: #1d5c63; --accent-soft: #e3f0ef; --warm: #b4532a; --warm-soft: #fbeee6;
+    --violet: #5a4a8a; --violet-soft: #efecf7;
+    --font: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font); }
+  #stage { position: fixed; inset: 0; display: grid; place-items: center; overflow: hidden; }
+  #deck { width: 1280px; height: 720px; position: relative; transform-origin: center center; }
+  .slide { position: absolute; inset: 0; width: 1280px; height: 720px; background: var(--paper);
+    border-radius: 18px; box-shadow: 0 10px 40px rgba(40, 30, 10, .12); display: none; overflow: hidden; }
+  .slide.active { display: block; }
+  .content { position: absolute; left: 72px; right: 72px; top: 52px; bottom: 70px; overflow: hidden; }
+  .kicker { font-size: 18px; letter-spacing: .12em; color: var(--accent); font-weight: 700; margin-bottom: 6px; }
+  h2 { font-size: 40px; line-height: 1.25; margin: 0 0 16px; font-weight: 800; }
+  h3 { font-size: 24px; margin: 18px 0 8px; color: var(--accent); }
+  .body { font-size: 24px; line-height: 1.5; }
+  .body p { margin: 0 0 14px; }
+  .body ul, .body ol { margin: 0 0 14px; padding-left: 1.3em; }
+  .body li { margin: 0 0 6px; }
+  .body li::marker { color: var(--accent); }
+  strong { color: var(--warm); }
+  code { font-size: .85em; background: #f0ece2; padding: 1px 6px; border-radius: 5px; }
+  table { border-collapse: collapse; width: 100%; font-size: 20px; line-height: 1.4; margin: 4px 0 14px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+  .box { border-radius: 12px; padding: 14px 18px; margin: 10px 0 14px; font-size: 21px; line-height: 1.5; }
+  .box.callout { background: var(--accent-soft); border-left: 6px solid var(--accent); }
+  .box.analogy { background: var(--violet-soft); border-left: 6px solid var(--violet); }
+  .box.debate { background: var(--warm-soft); border-left: 6px solid var(--warm); }
+  .flow { display: flex; align-items: stretch; gap: 10px; margin: 8px 0 18px; flex-wrap: nowrap; }
+  .flow .step { flex: 1 1 0; background: var(--accent); color: #fff; border-radius: 12px; padding: 14px 12px;
+    font-size: 20px; line-height: 1.35; text-align: center; display: grid; place-items: center; font-weight: 600; }
+  .flow .step:nth-child(4n+3) { background: #2f7a72; }
+  .flow .arrow { align-self: center; font-size: 28px; color: var(--muted); }
+  .quiz { padding-left: 1.4em; }
+  .quiz li { margin-bottom: 14px; }
+  .quiz .q { display: block; }
+  .quiz .a { display: block; font-size: 19px; color: var(--accent); margin-top: 4px; visibility: hidden; }
+  .reveal .quiz .a { visibility: visible; }
+  footer { position: absolute; left: 72px; right: 40px; bottom: 18px; height: 34px; display: flex;
+    justify-content: space-between; align-items: center; font-size: 14px; color: var(--muted);
+    border-top: 1px solid var(--line); padding-top: 8px; }
+  footer .wiki span { font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+  .pageno { font-weight: 700; color: var(--accent); font-size: 16px; }
+  /* 封面 */
+  .slide.layout-cover { background: linear-gradient(135deg, #1d5c63 0%, #13393d 100%); color: #fff; }
+  .slide.layout-cover .content { top: 150px; }
+  .slide.layout-cover h2 { font-size: 60px; color: #fff; }
+  .slide.layout-cover .kicker { color: #bfe3df; }
+  .slide.layout-cover .body { font-size: 26px; color: #e6f2f0; }
+  .slide.layout-cover strong { color: #ffd6b8; }
+  .slide.layout-cover footer { color: #bfe3df; border-color: rgba(255,255,255,.25); }
+  .slide.layout-cover .pageno { color: #fff; }
+  #progress { position: fixed; left: 0; top: 0; height: 4px; background: var(--accent); transition: width .2s; }
+  #hint { position: fixed; right: 14px; bottom: 10px; font-size: 12px; color: var(--muted); }
+  @media print {
+    #stage { position: static; display: block; } #deck { transform: none !important; height: auto; }
+    .slide { display: block; position: relative; page-break-after: always; margin-bottom: 0; box-shadow: none; }
+    #progress, #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="progress"></div>
+<div id="stage"><div id="deck">
+{{SLIDES}}
+</div></div>
+<div id="hint">← → 翻頁 · A 顯示答案 · F 全螢幕</div>
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var deck = document.getElementById('deck');
+  var cur = 0;
+  function fit() {
+    var s = Math.min(window.innerWidth / 1320, window.innerHeight / 760);
+    deck.style.transform = 'scale(' + s + ')';
+  }
+  function show(i) {
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach(function (el, k) { el.classList.toggle('active', k === cur); });
+    document.getElementById('progress').style.width = ((cur + 1) / slides.length * 100) + '%';
+    if (location.hash !== '#' + (cur + 1)) history.replaceState(null, '', '#' + (cur + 1));
+  }
+  document.addEventListener('keydown', function (e) {
+    if (['ArrowRight', 'PageDown', ' ', 'Enter'].indexOf(e.key) >= 0) { e.preventDefault(); show(cur + 1); }
+    else if (['ArrowLeft', 'PageUp', 'Backspace'].indexOf(e.key) >= 0) { e.preventDefault(); show(cur - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(slides.length - 1);
+    else if (e.key === 'a' || e.key === 'A') slides[cur].classList.toggle('reveal');
+    else if (e.key === 'f' || e.key === 'F') { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); }
+  });
+  document.getElementById('stage').addEventListener('click', function (e) {
+    if (e.target.closest('.quiz')) { slides[cur].classList.toggle('reveal'); return; }
+    show(e.clientX > window.innerWidth / 2 ? cur + 1 : cur - 1);
+  });
+  var tx = null;
+  document.addEventListener('touchstart', function (e) { tx = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (tx === null) return; var dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 40) show(dx < 0 ? cur + 1 : cur - 1); tx = null;
+  });
+  window.addEventListener('resize', fit);
+  window.addEventListener('hashchange', function () { var n = parseInt(location.hash.slice(1), 10); if (n) show(n - 1); });
+  fit();
+  var n0 = parseInt(location.hash.slice(1), 10);
+  show(n0 ? n0 - 1 : 0);
+  window.__deck = { show: show, current: function () { return cur; }, count: slides.length };
+})();
+</script>
+</body>
+</html>
